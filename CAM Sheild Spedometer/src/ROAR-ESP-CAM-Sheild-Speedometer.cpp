@@ -124,9 +124,9 @@ class ConfigCharCallback: public BLECharacteristicCallbacks {
         t.b[0] = value[0]; t.b[1] = value[1]; t.b[2] = value[2]; t.b[3] = value[3]; kp = t.fval;
         t.b[0] = value[4]; t.b[1] = value[5]; t.b[2] = value[6]; t.b[3] = value[7]; kd = t.fval;
         t.b[0] = value[8]; t.b[1] = value[9]; t.b[2] = value[10]; t.b[3] = value[11]; ki = t.fval;
-        if (kp < 100 && kp > 0) Kp = kp;
-        if (kd < 100 && kd > 0) Kd = kd;
-        if (ki < 100 && ki > 0) Ki = ki;
+        if (kp < 1000 && kp >= 0) Kp = kp;
+        if (kd < 100 && kd >= 0) Kd = kd;
+        if (ki < 100 && ki >= 0) Ki = ki;
         speedPID.SetTunings(Kp, Ki, Kd);
         // print it out for display
         Serial.print(kp); Serial.print(","); Serial.print(kd); Serial.print(","); Serial.print(ki); Serial.println();
