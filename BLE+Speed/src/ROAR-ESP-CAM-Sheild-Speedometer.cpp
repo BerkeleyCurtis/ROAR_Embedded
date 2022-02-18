@@ -6,29 +6,38 @@
 #include <ESP32Servo.h>
 #include <EEPROM.h> 
 
-
-// #define SERVICE_UUID                  "19B10010-E8F2-537E-4F6C-D104768A1214"
-// #define SPEED_CHARACTERISTIC_UUID     "19B10011-E8F2-537E-4F6C-D104768A1214"
-// #define STEERING_CHARACTERISTIC_UUID  "19B10015-E8F2-537E-4F6C-D104768A1214"
-// #define NAME_CHARACTERISTIC_UUID      "19B10012-E8F2-537E-4F6C-D104768A1214"
-// #define OVERRIDE_CHARACTERISTIC_UUID  "19B10013-E8F2-537E-4F6C-D104768A1214"
-// #define PID_CHARACTERISTIC_UUID       "19B10014-E8F2-537E-4F6C-D104768A1214"
+//===========Define only one of these two as 1 and the other as zero========
+#define ESP32_CAM 0
+#define CUSTOM_ROAR_PCB 1 
+#if ((ESP32_CAM + CUSTOM_ROAR_PCB) == 1) // only one board can be defined
+//==========================================================================
 
 #define SERVICE_UUID                  "19B10010-E8F2-537E-4F6C-D104768A1214"
 #define CONTROL_CHAR_UUID             "19B10011-E8F2-537E-4F6C-D104768A1214"
-#define VELOCITY_RETURN_UUID            "19B10011-E8F2-537E-4F6C-D104768A1215"
+#define VELOCITY_RETURN_UUID          "19B10011-E8F2-537E-4F6C-D104768A1215"
 #define PID_KValues_UUID              "19B10011-E8F2-537E-4F6C-D104768A1216"
 #define NAME_CHARACTERISTIC_UUID      "19B10014-E8F2-537E-4F6C-D104768A1214"
 #define OVERRIDE_CHARACTERISTIC_UUID  "19B10015-E8F2-537E-4F6C-D104768A1214"
 
+#if ESP32_CAM
 #define THROTTLE_PIN 14
 #define STEERING_PIN 2
 #define FLASH_LED_PIN 4
 #define RED_LED_PIN 33
 #define OVERRIDE_PIN 15
-#define SPEEDOMETER_PIN1 13 // update these pins
-#define SPEEDOMETER_PIN2 12 // update these pins
+#define SPEEDOMETER_PIN1 13
+#define SPEEDOMETER_PIN2 12
+#endif
 
+#if CUSTOM_ROAR_PCB
+#define THROTTLE_PIN 17
+#define STEERING_PIN 16
+#define FLASH_LED_PIN "ERROR"
+#define RED_LED_PIN 32
+#define OVERRIDE_PIN 18
+#define SPEEDOMETER_PIN1 26
+#define SPEEDOMETER_PIN2 27
+#endif
 
 #define OFFSET 1 // Start SSID after identifier byte
 const int MAXNAME = 50; // MAX characters in BLE name
@@ -49,17 +58,19 @@ Servo throttleServo;
 Servo steeringServo;
 
 //==============Speed and PID related===============================
-bool setDirection = 1; // set this from 1 to 0 if your hardware hall effect sensor is installed backwards. 
+//user settable values...
+int setDirection = 1; // set this from 1 to -1 if your hardware hall effect sensor is installed backwards. 
+double distofRotation = (0.079 / 3.0); // Measured distance of one third rotation of drive shaft
+double Kp=60, Ki=30, Kd=3; //Default Kp, Ki, Kd parameters
+int maxThrot = 1800;
+int minThrot = 1200;
+//----------------
 unsigned int deltaTime = 0; // track time between speed sensor readings
-double distofRotation = 0.079; // Measure distance of one rotation of drive shaft
 bool newValue = 0; // Has speed sensor picked up new value
 double target_speed = 0;
 double throttle_output = 1500;
 double speed_mps = 0; //Speed in meters per second
-double Kp=60, Ki=30, Kd=3; //Default Kp, Ki, Kd parameters
-bool direction = 1; // 1 is forward 0 is backward
-int maxThrot = 1800;
-int minThrot = 1500;
+int direction = setDirection; // 1 is forward -1 is backward ??? system dependant
 PID speedPID(&speed_mps, &throttle_output, &target_speed, Kp, Ki, Kd, DIRECT);
 //==================================================================
 
@@ -90,8 +101,12 @@ class ControlCharCallback: public BLECharacteristicCallbacks {
               unsigned int curr_throttle_read = atoi(token + 1);
               if (curr_throttle_read >= 1000 and curr_throttle_read <= 2000) {
                 // ws_throttle_read = curr_throttle_read;
-                target_speed = ((float)curr_throttle_read - 1500) / 100;
-                Serial.println(target_speed);
+                target_speed = ((float)curr_throttle_read - 1500.0) / 100.0;
+                if(target_speed == 0){
+                    speedPID.SetOutputLimits(1500, 1501);
+                }
+                else speedPID.SetOutputLimits(minThrot, maxThrot);
+                //Serial.println(target_speed);
               } 
             }
             token = strtok(NULL, ",");
@@ -122,12 +137,13 @@ class ConfigCharCallback: public BLECharacteristicCallbacks {
             byte b[4];
             float fval;
         } t;
+        //values get passed in order kp, kd, ki
         t.b[0] = value[0]; t.b[1] = value[1]; t.b[2] = value[2]; t.b[3] = value[3]; kp = t.fval;
-        t.b[0] = value[4]; t.b[1] = value[5]; t.b[2] = value[6]; t.b[3] = value[7]; kd = t.fval;
+        t.b[0] = value[4]; t.b[1] = value[5]; t.b[2] = value[6]; t.b[3] = value[7]; kd = t.fval; 
         t.b[0] = value[8]; t.b[1] = value[9]; t.b[2] = value[10]; t.b[3] = value[11]; ki = t.fval;
         if (kp < 1000 && kp >= 0) Kp = kp;
-        if (kd < 100 && kd >= 0) Kd = kd;
         if (ki < 100 && ki >= 0) Ki = ki;
+        if (kd < 100 && kd >= 0) Kd = kd;
         speedPID.SetTunings(Kp, Ki, Kd);
         // print it out for display
         Serial.print(kp); Serial.print(","); Serial.print(kd); Serial.print(","); Serial.print(ki); Serial.println();
@@ -137,7 +153,7 @@ class ConfigCharCallback: public BLECharacteristicCallbacks {
 
 class VelocityCharCallback: public BLECharacteristicCallbacks {
     void onRead(BLECharacteristic *pCharacteristic){
-      float my_velocity_reading = (float)(speed_mps * direction);
+      float my_velocity_reading = (float)(speed_mps); //* direction);
       pCharacteristic->setValue(my_velocity_reading);
       Serial.println("Sent velocity reading");
       Serial.println(my_velocity_reading);
@@ -208,14 +224,21 @@ void Rev_Interrupt_forward_only_deprecated (){
 }
 
 void Rev_Interrupt (){
-  unsigned long timeNow = millis();
-  static unsigned long lastTime = 0;
+  static unsigned int start_offset = 10000; //should be 1 to 10 if using millis()
+  
+  // unsigned long timeNow = millis();
+  unsigned long timeNow = micros();
+  static unsigned long lastTime = timeNow - start_offset; 
+  if(timeNow <= lastTime){ // should take care of micros rollover every 70 mins
+    lastTime = timeNow;
+    return;
+  }
   deltaTime = timeNow - lastTime;
   lastTime = timeNow;
   if(digitalRead(SPEEDOMETER_PIN2))
     direction = setDirection; // forward or backward set at top
   else
-    direction = !setDirection;
+    direction = -setDirection;
   newValue = 1;
 }
 
@@ -336,10 +359,14 @@ void ensureSmoothBackTransition() {
 
 void blinkFlashlight() {
   if (isFlashLightOn) {
+    #if ESP32_CAM
     ledcWrite(FLASH_LED_PIN, 0);
+    #endif 
     isFlashLightOn = false;
   } else {
+    #if ESP32_CAM
     ledcWrite(FLASH_LED_PIN, 100);
+    #endif
     isFlashLightOn = true;
   }
 }
@@ -363,7 +390,9 @@ void setup() {
   pinMode(SPEEDOMETER_PIN2, INPUT_PULLUP);
   attachInterrupt(SPEEDOMETER_PIN1, Rev_Interrupt, FALLING);
   pinMode(RED_LED_PIN, OUTPUT);
+  #if ESP32_CAM
   pinMode(FLASH_LED_PIN, OUTPUT);
+  #endif
   pinMode(OVERRIDE_PIN, OUTPUT);
   EEPROM.begin(EEPROMSIZE);
 
@@ -372,21 +401,23 @@ void setup() {
     loadNewDeviceName();
   }
   setupServo();
-  // Serial.println("1");
   setupBLE();
-  // Serial.println("2");
 
   speedPID.SetMode(AUTOMATIC);
   speedPID.SetSampleTime(20); // 2 seemed to work well w/o BLE. trying 20...
+  speedPID.SetOutputLimits(1500, 1501);
   speedPID.SetOutputLimits(minThrot, maxThrot);
+  //throttle_output = 1500;
 
 }
 
 void loop() {
-  static unsigned int timeout_total = 500;
+  static unsigned long timeout_total = 200000; //200 if using millis()
   static unsigned long lastTime = 0;
- // static int speedMovingAvg = 0;
- 
+  static unsigned long unscaleTime = 1000000; // 1000 if using millis() 
+  static int print_timing = 1000;
+  static int cycles = 0;
+
   if (deviceConnected == false) {
     blinkRedLED();
     writeToServo(1500, 1500);
@@ -395,22 +426,23 @@ void loop() {
 
     if(newValue){
       noInterrupts();
-      unsigned int tempdeltaTime = deltaTime;
+      unsigned long tempdeltaTime = deltaTime;
       interrupts();
-      speed_mps = 1000 * distofRotation / (double) tempdeltaTime;
-      if (speed_mps < 0) speed_mps = 0;
-      newValue = 0;
-      lastTime = millis(); // for 0mps timeout
+      speed_mps = direction * (unscaleTime * distofRotation / (double) tempdeltaTime);
+      newValue = 0; // clear new value 
+      // lastTime = millis();
+      lastTime = micros(); // for 0mps timeout
     }
     else{
-      unsigned long timeNow = millis();
+      // unsigned long timeNow = millis();
+      unsigned long timeNow = micros();
       if((timeNow - lastTime) > timeout_total){
         speed_mps = 0;
         lastTime = timeNow;
       }
     }
     
-    if(target_speed < 0.5){
+    if(target_speed < 0.2 && target_speed > -0.2){
       target_speed = 0;
     }
 
@@ -418,10 +450,18 @@ void loop() {
 
     if(throttle_output > maxThrot) throttle_output = maxThrot;
     if(throttle_output < minThrot) throttle_output = minThrot;  
-    if(target_speed == 0) throttle_output = 1500;
+    //if(target_speed == 0) throttle_output = 1500;
     writeToServo(throttle_output, ws_steering_read);
     // Serial.println("");
-    // Serial.println(speed_mps);
-    // Serial.println(throttle_output);
+    if(cycles > print_timing){
+      Serial.println("Speed");
+      Serial.println(speed_mps);
+      Serial.println("Throttle");
+      Serial.println(throttle_output);
+    }
+    cycles++;
   }
 }
+
+#endif // this ends the preprocessor #if statement from the very top
+// when you defined which board you are using.
