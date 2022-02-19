@@ -38,25 +38,22 @@
 #define SPEEDOMETER_PIN1 26
 #define SPEEDOMETER_PIN2 27
 #endif
-
+//===============EEPROM Setup for name storage======================
 #define OFFSET 1 // Start SSID after identifier byte
 const int MAXNAME = 50; // MAX characters in BLE name
 #define EEPROMSIZE (MAXNAME + OFFSET) // Total EEPROM size
-
 char DeviceName[MAXNAME] = "ROAR default";
-
+//==================================================================
 const char HANDSHAKE_START = '(';
 const unsigned long redLEDToggleDuration = 500; // ms
-
 volatile int32_t ws_throttle_read = 1500;
 volatile int32_t ws_steering_read = 1500;
 bool isForwardState = true; // car is currently in forward state.
 unsigned int latest_throttle = 1500; // set to neutral by default
 unsigned int latest_steering = 1500; // set to neutral by default
-
+//==========Servo objects===========================================
 Servo throttleServo;
 Servo steeringServo;
-
 //==============Speed and PID related===============================
 //user settable values...
 int setDirection = 1; // set this from 1 to -1 if your hardware hall effect sensor is installed backwards. 
@@ -73,13 +70,10 @@ double speed_mps = 0; //Speed in meters per second
 int direction = setDirection; // 1 is forward -1 is backward ??? system dependant
 PID speedPID(&speed_mps, &throttle_output, &target_speed, Kp, Ki, Kd, DIRECT);
 //==================================================================
-
 bool isFlashLightOn = false;
 bool isRedLEDOn = false;
 unsigned long lastREDLEDToggleTime = 0;  // will store last time LED was updated
-
 bool deviceConnected = false;
-
 
 class ControlCharCallback: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
@@ -224,12 +218,11 @@ void Rev_Interrupt_forward_only_deprecated (){
 }
 
 void Rev_Interrupt (){
-  static unsigned int start_offset = 10000; //should be 1 to 10 if using millis()
-  
+  // static unsigned int start_offset = 10000; //should be 1 to 10 if using millis()
   // unsigned long timeNow = millis();
   unsigned long timeNow = micros();
-  static unsigned long lastTime = timeNow - start_offset; 
-  if(timeNow <= lastTime){ // should take care of micros rollover every 70 mins
+  static unsigned long lastTime = 0;//timeNow - start_offset; //This causes jumpy acceleration I think
+  if(timeNow <= lastTime){ // should take care of micros() rollover every 70 mins
     lastTime = timeNow;
     return;
   }
