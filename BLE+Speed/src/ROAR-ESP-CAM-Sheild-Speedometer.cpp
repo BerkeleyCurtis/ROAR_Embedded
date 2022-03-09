@@ -16,8 +16,10 @@
 #define CONTROL_CHAR_UUID             "19B10011-E8F2-537E-4F6C-D104768A1214"
 #define VELOCITY_RETURN_UUID          "19B10011-E8F2-537E-4F6C-D104768A1215"
 #define PID_KValues_UUID              "19B10011-E8F2-537E-4F6C-D104768A1216"
+#define THROTTLE_RETURN_UUID          "19B10011-E8F2-537E-4F6C-D104768A1217"
 #define NAME_CHARACTERISTIC_UUID      "19B10012-E8F2-537E-4F6C-D104768A1214"
 #define OVERRIDE_CHARACTERISTIC_UUID  "19B10015-E8F2-537E-4F6C-D104768A1214"
+
 
 #if ESP32_CAM
 #define THROTTLE_PIN 14
@@ -147,10 +149,19 @@ class ConfigCharCallback: public BLECharacteristicCallbacks {
 
 class VelocityCharCallback: public BLECharacteristicCallbacks {
     void onRead(BLECharacteristic *pCharacteristic){
-      float my_velocity_reading = (float)(speed_mps); //* direction);
+      float my_velocity_reading = (float)(speed_mps);
       pCharacteristic->setValue(my_velocity_reading);
       Serial.println("Sent velocity reading");
       Serial.println(my_velocity_reading);
+    }
+};
+
+class ThrottleCharCallback: public BLECharacteristicCallbacks {
+    void onRead(BLECharacteristic *pCharacteristic){
+      float my_throttle_reading = (float)(throttle_output);
+      pCharacteristic->setValue(my_throttle_reading);
+      Serial.println("Sent throttle reading");
+      Serial.println(my_throttle_reading);
     }
 };
 
@@ -291,6 +302,11 @@ void setupBLE() {
                                             VELOCITY_RETURN_UUID,
                                             BLECharacteristic::PROPERTY_READ);
     vCharacteristic->setCallbacks(new VelocityCharCallback());
+
+    BLECharacteristic *throtReturnCharacteristic = pService->createCharacteristic(
+                                            THROTTLE_RETURN_UUID,
+                                            BLECharacteristic::PROPERTY_READ);
+    throtReturnCharacteristic->setCallbacks(new ThrottleCharCallback());
     
     pService->start();
 
