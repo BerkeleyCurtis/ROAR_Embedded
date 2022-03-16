@@ -6,6 +6,7 @@
 #include <ESP32Servo.h>
 #include <EEPROM.h> 
 
+
 //===========Define only one of these two as 1 and the other as zero========
 #define ESP32_CAM 0
 #define CUSTOM_ROAR_PCB 1 
@@ -16,7 +17,7 @@
 #define CONTROL_CHAR_UUID             "19B10011-E8F2-537E-4F6C-D104768A1214"
 #define VELOCITY_RETURN_UUID          "19B10011-E8F2-537E-4F6C-D104768A1215"
 #define PID_KValues_UUID              "19B10011-E8F2-537E-4F6C-D104768A1216"
-#define THROTTLE_RETURN_UUID          "19B10011-E8F2-537E-4F6C-D104768A1217"
+#define THROTVELOCITY_RETURN_UUID     "19B10011-E8F2-537E-4F6C-D104768A1217"
 #define NAME_CHARACTERISTIC_UUID      "19B10012-E8F2-537E-4F6C-D104768A1214"
 #define OVERRIDE_CHARACTERISTIC_UUID  "19B10015-E8F2-537E-4F6C-D104768A1214"
 
@@ -77,6 +78,103 @@ bool isRedLEDOn = false;
 unsigned long lastREDLEDToggleTime = 0;  // will store last time LED was updated
 bool deviceConnected = false;
 
+//==================== Function Declarations===================
+long long pack(float lo, float hi);
+void Rev_Interrupt_forward_only_deprecated ();
+void Rev_Interrupt ();
+void loadNewDeviceName();
+void setupBLE();
+void setupServo();
+void checkServo();
+void writeToServo(unsigned int throttle, unsigned int steering);
+void writeToSerial(unsigned int throttle, unsigned int steering);
+void ensureSmoothBackTransition();
+void blinkFlashlight();
+void blinkRedLED();
+
+//==================Main Setup and Loop functions==============
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(SPEEDOMETER_PIN1, INPUT_PULLUP);
+  pinMode(SPEEDOMETER_PIN2, INPUT_PULLUP);
+  attachInterrupt(SPEEDOMETER_PIN1, Rev_Interrupt, FALLING);
+  pinMode(RED_LED_PIN, OUTPUT);
+  #if ESP32_CAM
+  pinMode(FLASH_LED_PIN, OUTPUT);
+  #endif
+  pinMode(OVERRIDE_PIN, OUTPUT);
+  EEPROM.begin(EEPROMSIZE);
+
+  if(EEPROM.read(0) == 1){
+    Serial.println("Loading name from memory");
+    loadNewDeviceName();
+  }
+  setupServo();
+  setupBLE();
+
+  speedPID.SetMode(AUTOMATIC);
+  speedPID.SetSampleTime(20); // 2 seemed to work well w/o BLE. trying 20...
+  speedPID.SetOutputLimits(1500, 1501);
+  speedPID.SetOutputLimits(minThrot, maxThrot);
+  //throttle_output = 1500;
+
+}
+
+void loop() {
+  static unsigned long timeout_total = 200000; //200 if using millis()
+  static unsigned long lastTime = 0;
+  static unsigned long unscaleTime = 1000000; // 1000 if using millis() 
+  static int print_timing = 1000;
+  static int cycles = 0;
+
+  if (deviceConnected == false) {
+    blinkRedLED();
+    writeToServo(1500, 1500);
+  } else {
+    digitalWrite(RED_LED_PIN, LOW);
+
+    if(newValue){
+      noInterrupts();
+      unsigned long tempdeltaTime = deltaTime;
+      interrupts();
+      speed_mps = direction * (unscaleTime * distofRotation / (double) tempdeltaTime);
+      newValue = 0; // clear new value 
+      // lastTime = millis();
+      lastTime = micros(); // for 0mps timeout
+    }
+    else{
+      // unsigned long timeNow = millis();
+      unsigned long timeNow = micros();
+      if((timeNow - lastTime) > timeout_total){
+        speed_mps = 0;
+        lastTime = timeNow;
+      }
+    }
+    
+    if(target_speed < 0.2 && target_speed > -0.2){
+      target_speed = 0;
+    }
+
+    speedPID.Compute();
+
+    if(throttle_output > maxThrot) throttle_output = maxThrot;
+    if(throttle_output < minThrot) throttle_output = minThrot;  
+    //if(target_speed == 0) throttle_output = 1500;
+    writeToServo(throttle_output, ws_steering_read);
+    // Serial.println("");
+    if(cycles > print_timing){
+      Serial.println("Speed");
+      Serial.println(speed_mps);
+      Serial.println("Throttle");
+      Serial.println(throttle_output);
+    }
+    cycles++;
+  }
+}
+
+//===============Function Descriptions=========================
+
 class ControlCharCallback: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
       // let's not change this since it might break other people's workign code. 
@@ -110,7 +208,7 @@ class ControlCharCallback: public BLECharacteristicCallbacks {
               unsigned int curr_steering_read = atoi(token);
               if (curr_steering_read >= 1000 and curr_steering_read <= 2000) {
                 ws_steering_read = curr_steering_read;
-                Serial.println(ws_steering_read);
+                // Serial.println(ws_steering_read);
               }
             }
         }
@@ -151,17 +249,26 @@ class VelocityCharCallback: public BLECharacteristicCallbacks {
     void onRead(BLECharacteristic *pCharacteristic){
       float my_velocity_reading = (float)(speed_mps);
       pCharacteristic->setValue(my_velocity_reading);
-      Serial.println("Sent velocity reading");
-      Serial.println(my_velocity_reading);
+      // Serial.println("Sent velocity reading");
+      // Serial.println(my_velocity_reading);
     }
 };
 
-class ThrottleCharCallback: public BLECharacteristicCallbacks {
+// class ThrottleCharCallback: public BLECharacteristicCallbacks {
+//     void onRead(BLECharacteristic *pCharacteristic){
+//       float my_throttle_reading = (float)(throttle_output);
+//       pCharacteristic->setValue(my_throttle_reading);
+//       Serial.println("Sent throttle reading");
+//       Serial.println(my_throttle_reading);
+//     }
+// };
+
+class VelocityAndThrottleCharCallback: public BLECharacteristicCallbacks {
     void onRead(BLECharacteristic *pCharacteristic){
-      float my_throttle_reading = (float)(throttle_output);
-      pCharacteristic->setValue(my_throttle_reading);
-      Serial.println("Sent throttle reading");
-      Serial.println(my_throttle_reading);
+      double velocityThrottleOut = pack((float)speed_mps, (float)throttle_output);
+      pCharacteristic->setValue(velocityThrottleOut);
+      // Serial.println("Sent throttle reading");
+      // Serial.println(velocityThrottleOut);
     }
 };
 
@@ -170,7 +277,7 @@ class nameChangeCallbacks: public BLECharacteristicCallbacks {
       std::string value = nameChangeCharacteristic->getValue();
       if (value.length() > 0) {
         int rxLength = value.length();
-        for (char i = 0; i < rxLength; i++) {
+        for (uint8_t i = 0; i < rxLength; i++) {
             if(i > MAXNAME){
               Serial.print("Your BLE is too long for my little memory :)");
               break;
@@ -180,7 +287,7 @@ class nameChangeCallbacks: public BLECharacteristicCallbacks {
             Serial.print(value[i]);
         }
         Serial.println("");
-        for(char i = rxLength; i < MAXNAME; i++) {
+        for(uint8_t i = rxLength; i < MAXNAME; i++) {
           EEPROM.write(i + OFFSET, 0); // clear the rest of the EEPROM
           DeviceName[i] = 0;
         }
@@ -303,10 +410,10 @@ void setupBLE() {
                                             BLECharacteristic::PROPERTY_READ);
     vCharacteristic->setCallbacks(new VelocityCharCallback());
 
-    BLECharacteristic *throtReturnCharacteristic = pService->createCharacteristic(
-                                            THROTTLE_RETURN_UUID,
+    BLECharacteristic *throtAndVelocityReturnCharacteristic = pService->createCharacteristic(
+                                            THROTVELOCITY_RETURN_UUID,
                                             BLECharacteristic::PROPERTY_READ);
-    throtReturnCharacteristic->setCallbacks(new ThrottleCharCallback());
+    throtAndVelocityReturnCharacteristic->setCallbacks(new VelocityAndThrottleCharCallback());
     
     pService->start();
 
@@ -330,6 +437,20 @@ void checkServo() {
   if (steeringServo.attached() == false) {
     steeringServo.attach(STEERING_PIN);
   }
+}
+
+// from https://stackoverflow.com/questions/4650489/packing-floats-into-a-long-long
+long long pack(float lo, float hi) {
+    assert(sizeof(float) == 4);
+    assert(sizeof(long long) == 8);
+    assert(CHAR_BIT == 8);
+
+    uint32_t target;
+    memcpy(&target, &lo, sizeof(target));
+    long long result = target;
+    memcpy(&target, &hi, sizeof(target));
+    result += ((long long)target) << 32;
+    return result;
 }
 
 void writeToServo(unsigned int throttle, unsigned int steering) {
@@ -390,85 +511,6 @@ void blinkRedLED() {
     digitalWrite(RED_LED_PIN, LOW);
     isRedLEDOn = true;
     lastREDLEDToggleTime = currentMillis;
-  }
-}
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(SPEEDOMETER_PIN1, INPUT_PULLUP);
-  pinMode(SPEEDOMETER_PIN2, INPUT_PULLUP);
-  attachInterrupt(SPEEDOMETER_PIN1, Rev_Interrupt, FALLING);
-  pinMode(RED_LED_PIN, OUTPUT);
-  #if ESP32_CAM
-  pinMode(FLASH_LED_PIN, OUTPUT);
-  #endif
-  pinMode(OVERRIDE_PIN, OUTPUT);
-  EEPROM.begin(EEPROMSIZE);
-
-  if(EEPROM.read(0) == 1){
-    Serial.println("Loading name from memory");
-    loadNewDeviceName();
-  }
-  setupServo();
-  setupBLE();
-
-  speedPID.SetMode(AUTOMATIC);
-  speedPID.SetSampleTime(20); // 2 seemed to work well w/o BLE. trying 20...
-  speedPID.SetOutputLimits(1500, 1501);
-  speedPID.SetOutputLimits(minThrot, maxThrot);
-  //throttle_output = 1500;
-
-}
-
-void loop() {
-  static unsigned long timeout_total = 200000; //200 if using millis()
-  static unsigned long lastTime = 0;
-  static unsigned long unscaleTime = 1000000; // 1000 if using millis() 
-  static int print_timing = 1000;
-  static int cycles = 0;
-
-  if (deviceConnected == false) {
-    blinkRedLED();
-    writeToServo(1500, 1500);
-  } else {
-    digitalWrite(RED_LED_PIN, LOW);
-
-    if(newValue){
-      noInterrupts();
-      unsigned long tempdeltaTime = deltaTime;
-      interrupts();
-      speed_mps = direction * (unscaleTime * distofRotation / (double) tempdeltaTime);
-      newValue = 0; // clear new value 
-      // lastTime = millis();
-      lastTime = micros(); // for 0mps timeout
-    }
-    else{
-      // unsigned long timeNow = millis();
-      unsigned long timeNow = micros();
-      if((timeNow - lastTime) > timeout_total){
-        speed_mps = 0;
-        lastTime = timeNow;
-      }
-    }
-    
-    if(target_speed < 0.2 && target_speed > -0.2){
-      target_speed = 0;
-    }
-
-    speedPID.Compute();
-
-    if(throttle_output > maxThrot) throttle_output = maxThrot;
-    if(throttle_output < minThrot) throttle_output = minThrot;  
-    //if(target_speed == 0) throttle_output = 1500;
-    writeToServo(throttle_output, ws_steering_read);
-    // Serial.println("");
-    if(cycles > print_timing){
-      Serial.println("Speed");
-      Serial.println(speed_mps);
-      Serial.println("Throttle");
-      Serial.println(throttle_output);
-    }
-    cycles++;
   }
 }
 
