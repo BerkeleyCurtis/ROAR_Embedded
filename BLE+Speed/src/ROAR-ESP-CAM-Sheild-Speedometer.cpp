@@ -114,7 +114,7 @@ void setup() {
   setupBLE();
 
   speedPID.SetMode(AUTOMATIC);
-  speedPID.SetSampleTime(20); // 2 seemed to work well w/o BLE. trying 20...
+  speedPID.SetSampleTime(10); // 20 Worked well. Changed to 10 for ROAR-FLOW
   speedPID.SetOutputLimits(1500, 1501);
   speedPID.SetOutputLimits(minThrot, maxThrot);
   //throttle_output = 1500;
@@ -265,8 +265,21 @@ class VelocityCharCallback: public BLECharacteristicCallbacks {
 
 class VelocityAndThrottleCharCallback: public BLECharacteristicCallbacks {
     void onRead(BLECharacteristic *pCharacteristic){
-      double velocityThrottleOut = pack((float)speed_mps, (float)throttle_output);
-      pCharacteristic->setValue(velocityThrottleOut);
+      long long velocityThrottleOut = pack((float)speed_mps, (float)throttle_output);
+      /*WARNING Header file changed to support long long type in BLECharacteristic.cpp and .h
+      Add the code below at line 708 of BLECharacteristic.cpp
+      ==========================================================
+      void BLECharacteristic::setValue(long long& data64) {
+	    long long temp = data64;
+	    setValue((uint8_t*)&temp, 8);
+      } // setValue
+      ==========================================================
+      Add this line to BLECharacteristic.h after line 79:
+      ==========================================================
+      void setValue(long long& data64); 
+      ==========================================================
+      */
+      pCharacteristic->setValue(velocityThrottleOut); 
       // Serial.println("Sent throttle reading");
       // Serial.println(velocityThrottleOut);
     }
