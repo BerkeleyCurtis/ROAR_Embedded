@@ -1,3 +1,5 @@
+#include <Arduino.h>
+
 #define echoPin 25 // attach pin D2 Arduino to pin Echo of HC-SR04
 #define trigPin 27 //attach pin D3 Arduino to pin Trig of HC-SR04
 
@@ -11,7 +13,7 @@ void setup() {
   Serial.begin(115200); // // Serial Communication is starting with 9600 of baudrate speed
 
 }
-void loop() {
+int check_ultrasonic() {
   // Clears the trigPin condition
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
@@ -20,13 +22,13 @@ void loop() {
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
   // Reads the echoPin, returns the sound wave travel time in microseconds
-  duration = pulseIn(echoPin, HIGH);
+  duration = pulseIn(echoPin, HIGH); //WARNING - POLLING may take a while
   // Calculating the distance
-  distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
+  distance = duration * 0.034 / 2.0; // Speed of sound wave divided by 2 (go and back)
   // Displays the distance on the Serial Monitor
   Serial.print("Distance: ");
   Serial.print(distance);
   Serial.println(" cm");
-  delay(500);
+  return distance;
 
 }

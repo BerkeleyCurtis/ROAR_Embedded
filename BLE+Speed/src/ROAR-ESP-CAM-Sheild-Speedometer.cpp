@@ -5,6 +5,7 @@
 #include <BLEServer.h>
 #include <ESP32Servo.h>
 #include <EEPROM.h> 
+#include <IR_code.h>
 
 
 //===========Define only one of these two as 1 and the other as zero========
