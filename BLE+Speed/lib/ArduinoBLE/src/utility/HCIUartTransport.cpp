@@ -30,7 +30,8 @@
 #elif defined(ARDUINO_PORTENTA_H7_M7)
 #define SerialHCI Serial2
 #else
-#error "Unsupported board selected!"
+#define SerialHCI Serial2
+// #error "Unsupported board selected!"
 #endif
 
 HCIUartTransportClass::HCIUartTransportClass(HardwareSerial& uart, unsigned long baudrate) :
