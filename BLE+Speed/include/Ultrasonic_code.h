@@ -1,7 +1,7 @@
 #include <Arduino.h>
-
-#define echoPin 25 // attach pin D2 Arduino to pin Echo of HC-SR04
-#define trigPin 27 //attach pin D3 Arduino to pin Trig of HC-SR04
+#ifndef DEFINITIONS_H 
+#include <ROAR_Definitions.h>
+#endif
 
 // defines variables
 long duration; // variable for the duration of sound wave travel

@@ -1,6 +1,7 @@
 #include <Arduino.h>
-#define IR 25
-
+#ifndef DEFINITIONS_H 
+#include <ROAR_Definitions.h>
+#endif
 
 
 
