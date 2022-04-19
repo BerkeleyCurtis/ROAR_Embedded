@@ -5,10 +5,10 @@
 
 
 
-int check_IR() {
-  int reading = analogRead(IR);
+int read_IR(int IR_input) {
+  int reading = analogRead(IR_input);
 
-  Serial.println(reading);
+  // Serial.println(reading);
 
   return reading;
 }

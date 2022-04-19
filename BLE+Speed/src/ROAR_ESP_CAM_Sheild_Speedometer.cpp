@@ -2,6 +2,8 @@
 #include <EEPROM.h>
 #include <ROAR_Servo.h>
 #include <ROAR_BLE_funcs.h>
+#include <IR_code.h>
+#include <Ultrasonic_code.h>
 #ifndef DEFINITIONS_H 
 #include <ROAR_Definitions.h>
 #endif
@@ -9,14 +11,14 @@
 #include <ROAR_globalnames.h>
 #endif
 
-
 /* -------------------------------------------------------------------------- */
 /*            Define which PCB you are using in ROAR_Definitions.h            */
 /* -------------------------------------------------------------------------- */
 
-#if ((ESP32_CAM + CUSTOM_ROAR_PCB) == 1) // only one board can be defined
+#if ((ESP32_CAM + CUSTOM_ROAR_PCB + HARD_ML) == 1) // only one board can be defined
 
 /* -------------------------- Function Declarations ------------------------- */
+void standard_opperation();
 long long pack(float lo, float hi);
 void Rev_Interrupt_forward_only_deprecated ();
 void Rev_Interrupt ();
@@ -55,10 +57,40 @@ void setup() {
   speedPID.SetOutputLimits(1500, 1501);
   speedPID.SetOutputLimits(minThrot, maxThrot);
   //throttle_output = 1500;
+  pinMode(trigPin, OUTPUT); // Sets the trigPin as an OUTPUT
+  pinMode(echoPin, INPUT); // Sets the echoPin as an INPUT
+  pinMode(RESET, INPUT);
 
 }
 
 void loop() {
+  static bool dead = 0; // 1 is dead
+  if ((read_IR(IR_R) < 3500) | (read_IR(IR_L) < 3500) | (check_ultrasonic() < 10)){
+     Serial.println("too high dude");
+     dead = 1;
+     writeToServo(1500, 1500);
+     while(dead){
+       writeToServo(1500, 1500);
+       delay(100);
+       Serial.println("you're dead");
+       if(digitalRead(RESET)){
+         Serial.println("Reset");
+         dead = 0;
+         break;
+       }
+     }
+  }
+  else{
+    Serial.println("running normally");
+    standard_opperation();
+  }
+    
+  
+}
+
+/* -------------------------- Function Descriptions ------------------------- */
+
+void standard_opperation(){
   static unsigned long timeout_total = 200000; //200 if using millis()
   static unsigned long lastTime = 0;
   static unsigned long unscaleTime = 1000000; // 1000 if using millis() 
@@ -100,17 +132,15 @@ void loop() {
     //if(target_speed == 0) throttle_output = 1500;
     writeToServo(throttle_output, ws_steering_read);
     // Serial.println("");
-    if(cycles > print_timing){
-      Serial.println("Speed");
-      Serial.println(speed_mps);
-      Serial.println("Throttle");
-      Serial.println(throttle_output);
-    }
-    cycles++;
+    // if(cycles > print_timing){
+      // Serial.println("Speed");
+      // Serial.println(speed_mps);
+      // Serial.println("Throttle");
+      // Serial.println(throttle_output);
+    // }
+    // cycles++;
   }
 }
-
-/* -------------------------- Function Descriptions ------------------------- */
 
 void Rev_Interrupt_forward_only_deprecated (){
   unsigned long timeNow = millis();

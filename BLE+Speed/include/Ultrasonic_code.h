@@ -3,17 +3,10 @@
 #include <ROAR_Definitions.h>
 #endif
 
-// defines variables
-long duration; // variable for the duration of sound wave travel
-int distance; // variable for the distance measurement
-
-void setup() {
-  pinMode(trigPin, OUTPUT); // Sets the trigPin as an OUTPUT
-  pinMode(echoPin, INPUT); // Sets the echoPin as an INPUT
-  Serial.begin(115200); // // Serial Communication is starting with 9600 of baudrate speed
-
-}
 int check_ultrasonic() {
+  // defines variables
+  long duration; // variable for the duration of sound wave travel
+  int distance; // variable for the distance measurement
   // Clears the trigPin condition
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
@@ -26,9 +19,8 @@ int check_ultrasonic() {
   // Calculating the distance
   distance = duration * 0.034 / 2.0; // Speed of sound wave divided by 2 (go and back)
   // Displays the distance on the Serial Monitor
-  Serial.print("Distance: ");
-  Serial.print(distance);
-  Serial.println(" cm");
+  // Serial.print("Distance: ");
+  // Serial.print(distance);
+  // Serial.println(" cm");
   return distance;
-
 }

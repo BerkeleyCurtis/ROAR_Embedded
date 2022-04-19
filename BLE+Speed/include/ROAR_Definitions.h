@@ -2,8 +2,8 @@
 
 //===========Define only one of these two as 1 and the other as zero========
 #define ESP32_CAM 0
-#define CUSTOM_ROAR_PCB 1 
-#define HARD_ML 0
+#define CUSTOM_ROAR_PCB 0 
+#define HARD_ML 1
 //==========================================================================
 
 #if ((ESP32_CAM + CUSTOM_ROAR_PCB + HARD_ML) == 1) // only one board can be defined
@@ -45,15 +45,17 @@
 
 #if HARD_ML
 #define THROTTLE_PIN 17
-#define STEERING_PIN 16
+#define STEERING_PIN 19
 #define FLASH_LED_PIN 255
 #define RED_LED_PIN 32
-#define OVERRIDE_PIN 18
+#define OVERRIDE_PIN 255
 #define SPEEDOMETER_PIN1 26
 #define SPEEDOMETER_PIN2 27
-#define echoPin 25 // attach pin D2 Arduino to pin Echo of HC-SR04
-#define trigPin 27 //attach pin D3 Arduino to pin Trig of HC-SR04
-#define IR 25 // Infrared Analog pin
+#define echoPin 18 // attach pin D2 Arduino to pin Echo of HC-SR04
+#define trigPin 4 //attach pin D3 Arduino to pin Trig of HC-SR04
+#define IR_R 32 // Infrared Analog pin
+#define IR_L 33 // Infrared Analog pin
+#define RESET 35 // To reset the loop
 #endif
 
 #else 
