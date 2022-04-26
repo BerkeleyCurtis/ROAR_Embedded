@@ -66,6 +66,7 @@ void setup() {
 void loop() {
   static bool dead = 0; // 1 is dead
   if ((read_IR(IR_R) < 3500) | (read_IR(IR_L) < 3500) | (check_ultrasonic() < 10)){
+     reward = 2;
      Serial.println("too high dude");
      dead = 1;
      writeToServo(1500, 1500);
@@ -81,6 +82,7 @@ void loop() {
      }
   }
   else{
+    reward = 0;
     Serial.println("running normally");
     standard_opperation();
   }

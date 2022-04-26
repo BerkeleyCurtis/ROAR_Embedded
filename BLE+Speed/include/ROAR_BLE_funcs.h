@@ -94,11 +94,22 @@ class ConfigCharCallback: public BLECharacteristicCallbacks {
     }
 };
 
+#if HARD_ML
+class rewardCallback: public BLECharacteristicCallbacks {
+    void onRead(BLECharacteristic *pCharacteristic){
+      float return_reward = float(reward);
+      pCharacteristic->setValue(return_reward);
+      Serial.print("Sent reward");
+      Serial.println(return_reward);
+    }
+};
+#endif
+
 class VelocityCharCallback: public BLECharacteristicCallbacks {
     void onRead(BLECharacteristic *pCharacteristic){
       float my_velocity_reading = (float)(speed_mps);
       pCharacteristic->setValue(my_velocity_reading);
-      // Serial.println("Sent velocity reading");
+      // Serial.print("Sent velocity reading");
       // Serial.println(my_velocity_reading);
     }
 };
@@ -233,6 +244,13 @@ void setupBLE() {
                                             BLECharacteristic::PROPERTY_READ);
     throtAndVelocityReturnCharacteristic->setCallbacks(new VelocityAndThrottleCharCallback());
     
+    #if HARD_ML
+    BLECharacteristic *rewardCharacteristic = pService->createCharacteristic(
+                                            REWARD_UUID,
+                                            BLECharacteristic::PROPERTY_READ);
+    rewardCharacteristic->setCallbacks(new rewardCallback());
+    #endif
+
     pService->start();
 
     BLEDevice::startAdvertising();

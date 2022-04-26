@@ -56,6 +56,7 @@
 #define IR_R 32 // Infrared Analog pin
 #define IR_L 33 // Infrared Analog pin
 #define RESET 35 // To reset the loop
+#define REWARD_UUID     "19B10011-E8F2-537E-4F6C-D104768A1218"
 #endif
 
 #else 
